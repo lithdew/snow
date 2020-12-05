@@ -79,7 +79,7 @@ pub fn Client(comptime opts: Options) type {
             try conn.socket.inner.connect(conn.socket.address);
 
             if (comptime meta.trait.hasFn("handshake")(Protocol)) {
-                try self.protocol.handshake(.client, &conn.socket);
+                conn.socket.context = try self.protocol.handshake(.client, &conn.socket);
             }
 
             self.pool[self.pool_len] = conn;

@@ -4,6 +4,7 @@ const sync = @import("sync.zig");
 const pike = @import("pike/pike.zig");
 
 const net = std.net;
+const meta = std.meta;
 
 pub const Side = packed enum(u1) {
     client,
@@ -16,6 +17,7 @@ pub const Options = packed struct {
 
     protocol_type: type = void,
     message_type: type = []const u8,
+    context_type: type = void,
 
     write_queue_size: usize = 128,
     read_buffer_size: usize = 4 * 1024 * 1024,
@@ -38,9 +40,12 @@ pub fn Socket(comptime side: Side, comptime opts: Options) type {
 
         const WriteQueue = sync.Queue(opts.message_type, opts.write_queue_size);
         const Protocol = opts.protocol_type;
+        const Context = opts.context_type;
 
         inner: pike.Socket,
         address: net.Address,
+
+        context: Context = undefined,
         write_queue: WriteQueue = .{},
 
         pub fn init(inner: pike.Socket, address: net.Address) Self {
@@ -50,6 +55,10 @@ pub fn Socket(comptime side: Side, comptime opts: Options) type {
         pub fn deinit(self: *Self) void {
             self.write_queue.close();
             self.inner.deinit();
+
+            if (comptime meta.trait.hasFn("deinit")(Context)) {
+                self.context.deinit();
+            }
         }
 
         pub inline fn unwrap(self: *Self) *pike.Socket {

@@ -52,7 +52,7 @@ const Protocol = struct {
 };
 ```
 
-A `handshake(self: *Protocol, side: Side, socket: anytype)` may additionally be specified in a `Protocol` which gets invoked upon the successful establishment of an incoming / outgoing connection.
+A `handshake(self: *Protocol, side: Side, socket: anytype) !Context` may additionally be specified in a `Protocol` which gets invoked upon the successful establishment of an incoming / outgoing connection.
 
 
 ## Client
