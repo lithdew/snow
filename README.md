@@ -2,6 +2,16 @@
 
 A small, fast, cross-platform, async Zig networking framework built on top of [lithdew/pike](https://github.com/lithdew/pike).
 
+It automatically handles:
+1. buffering/framing data coming in and out of a socket,
+2. managing the lifecycle of incoming / outgoing connections, and 
+3. representing a singular `Client` / `Server` as a bounded adaptive pool of outgoing / incoming connections.
+
+It also allows you to specify:
+1. how messages are framed (`\n` suffixed to each message, message length prefixed to each message, etc.),
+2. a sequence of steps to be performed before a connection is marked as being successfully established (a handshake), and
+3. an upper bound to the max number of connections a `Client` / `Server` may pool.
+
 ## Protocol
 
 Applications written with _snow_ provide a `Protocol` implementation which specifies how message are encoded / decoded into frames.
