@@ -9,8 +9,8 @@ It automatically handles:
 
 It also allows you to specify:
 1. how messages are framed (`\n` suffixed to each message, message length prefixed to each message, etc.),
-2. a sequence of steps to be performed before a connection is marked as being successfully established (a handshake), and
-3. an upper bound to the max number of connections a `Client` / `Server` may pool.
+2. a sequence of steps to be performed before successfully establishing a connection (a handshake protocol), and
+3. an upper bound to the maximum number of connections a `Client` / `Server` may pool in total.
 
 ## Protocol
 
