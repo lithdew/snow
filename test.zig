@@ -1,14 +1,11 @@
 const std = @import("std");
+const snow = @import("snow.zig");
 const sync = @import("sync.zig");
 const pike = @import("pike/pike.zig");
 
 const net = std.net;
 const mem = std.mem;
 const testing = std.testing;
-
-usingnamespace @import("socket.zig");
-usingnamespace @import("client.zig");
-usingnamespace @import("server.zig");
 
 test "client / server" {
     const Protocol = struct {
@@ -21,7 +18,7 @@ test "client / server" {
             self.* = undefined;
         }
 
-        pub fn read(self: *Self, side: Side, socket: anytype, reader: anytype) !void {
+        pub fn read(self: *Self, side: snow.Side, socket: anytype, reader: anytype) !void {
             while (true) {
                 const line = try reader.readLine();
                 defer reader.shift(line.len);
@@ -30,7 +27,7 @@ test "client / server" {
             }
         }
 
-        pub fn write(self: *Self, side: Side, socket: anytype, writer: anytype, items: [][]const u8) !void {
+        pub fn write(self: *Self, side: snow.Side, socket: anytype, writer: anytype, items: [][]const u8) !void {
             for (items) |message| {
                 if (mem.indexOfScalar(u8, message, '\n') != null) {
                     return error.UnexpectedDelimiter;
@@ -45,13 +42,13 @@ test "client / server" {
         }
     };
 
-    const opts: Options = .{ .protocol_type = *Protocol };
+    const opts: snow.Options = .{ .protocol_type = *Protocol };
 
     const Test = struct {
         fn run(notifier: *const pike.Notifier, protocol: *Protocol, stopped: *bool) !void {
             defer stopped.* = true;
 
-            var server = try Server(opts).init(
+            var server = try snow.Server(opts).init(
                 protocol,
                 testing.allocator,
                 notifier,
@@ -61,7 +58,7 @@ test "client / server" {
 
             try server.serve();
 
-            var client = Client(opts).init(
+            var client = snow.Client(opts).init(
                 protocol,
                 testing.allocator,
                 notifier,
