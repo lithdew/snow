@@ -22,6 +22,13 @@ pub const Options = packed struct {
     write_buffer_size: usize = 4 * 1024 * 1024,
 };
 
+pub fn yield() void {
+    suspend {
+        var task = pike.Task.init(@frame());
+        pike.dispatch(&task, .{ .use_lifo = true });
+    }
+}
+
 pub fn Socket(comptime side: Side, comptime opts: Options) type {
     return struct {
         const Self = @This();
@@ -59,12 +66,16 @@ pub fn Socket(comptime side: Side, comptime opts: Options) type {
             var writer = async self.runWriter(protocol);
             defer await writer catch {};
 
+            yield();
+
             try protocol.read(side, self, &reader);
         }
 
         fn runWriter(self: *Self, protocol: Protocol) !void {
             var writer = Writer.init(self.unwrap());
             var queue: @TypeOf(self.write_queue.items) = undefined;
+
+            yield();
 
             while (true) {
                 const num_items = try self.write_queue.pop(queue[0..]);

@@ -143,6 +143,8 @@ pub fn Client(comptime opts: Options) type {
         }
 
         fn runConnection(self: *Self, conn: *Connection) !void {
+            yield();
+            
             defer if (self.deleteConnection(conn)) {
                 conn.socket.inner.deinit();
                 suspend {

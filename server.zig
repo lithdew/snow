@@ -85,6 +85,8 @@ pub fn Server(comptime opts: Options) type {
         }
 
         fn run(self: *Self) !void {
+            yield();
+
             defer if (!self.done.xchg(true, .SeqCst)) {
                 self.socket.deinit();
                 self.close();
