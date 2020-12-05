@@ -1,6 +1,6 @@
 # snow
 
-A small, fast, cross-platform Zig async networking framework built on top of [lithdew/pike](https://github.com/lithdew/pike).
+A small, fast, cross-platform, async Zig networking framework built on top of [lithdew/pike](https://github.com/lithdew/pike).
 
 ## Protocol
 
@@ -12,7 +12,7 @@ Given a `Protocol` implementation, a `Client` / `Server` may be instantiated.
 
 Here is an example of a `Protocol` that frames messages based on an End-of-Line character ('\n') suffixed at the end of each message:
 
-```rs
+```zig
 const std = @import("std");
 const snow = @import("snow");
 
@@ -71,8 +71,6 @@ An interesting detail to note is that the writer coroutine is entirely lock-free
 
 ## Performance
 
-_snow_ was written with performance in mind: zero heap allocations occur in all hot paths.
-
-Heap allocations only ever occur when establishing a new incoming / outgoing connection.
+_snow_ was written with performance in mind: zero heap allocations occur in all hot paths. Heap allocations only ever occur when establishing a new incoming / outgoing connection.
 
 All other underlying components are stack-allocated and recycled as much as possible.
