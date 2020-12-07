@@ -35,7 +35,7 @@ const Protocol = struct {
     // Feel free to read from / write to the socket here, and to return an error to prevent
     // a connection from being marked as being successfully established.
     //
-    // Rather than 'void', snow.Option.context_type may be set and returned from 'handshake'
+    // Rather than 'void', snow.Options.context_type may be set and returned from 'handshake'
     // to bootstrap a connection with additional fields and methods under 'socket.context'.
     pub fn handshake(self: *Self, side: snow.Side, socket: anytype) !void {
         return {};
@@ -60,7 +60,7 @@ const Protocol = struct {
     // a connection!
     //
     // Rather than '[]const u8', custom message types may be set to be queuable to the
-    // connections write queue by setting snow.Option.message_type.
+    // connections write queue by setting snow.Options.message_type.
     pub fn write(self: *Self, side: snow.Side, socket: anytype, writer: anytype, items: [][]const u8) !void {
         for (items) |message| {
             if (mem.indexOfScalar(u8, message, '\n') != null) {
