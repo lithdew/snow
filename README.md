@@ -31,14 +31,22 @@ const mem = std.mem;
 const Protocol = struct {
     const Self = @This();
 
+    // This gets called right before a connection is marked to be successfully established!
+    // Feel free to read from / write to the socket here, and to return an error to prevent
+    // a connection from being marked as being successfully established.
+    //
+    // Rather than 'void', snow.Option.context_type may be set and returned from 'handshake'
+    // to bootstrap a connection with additional fields and methods under 'socket.context'.
     pub fn handshake(self: *Self, side: snow.Side, socket: anytype) !void {
         return {};
     }
 
+    // This gets called before a connection is closed!
     pub fn close(self: *Self, side: snow.Side, socket: anytype) void {
         return {};
     }
 
+    // This gets called when data is ready to be read from a connection!
     pub fn read(self: *Self, side: snow.Side, socket: anytype, reader: anytype) !void {
         while (true) {
             const line = try reader.readLine();
@@ -48,6 +56,8 @@ const Protocol = struct {
         }
     }
 
+    // This gets called when data is queued and ready to be encoded and written to
+    // a connection!
     pub fn write(self: *Self, side: snow.Side, socket: anytype, writer: anytype, items: [][]const u8) !void {
         for (items) |message| {
             if (mem.indexOfScalar(u8, message, '\n') != null) {
@@ -63,9 +73,6 @@ const Protocol = struct {
     }
 };
 ```
-
-A `handshake(self: *Protocol, side: Side, socket: anytype) !Context` may additionally be specified in a `Protocol` which gets invoked upon the successful establishment of an incoming / outgoing connection.
-
 
 ## Client
 
