@@ -29,14 +29,22 @@ const snow = @import("snow");
 const mem = std.mem;
 
 const Protocol = struct {
-    pub fn read(self: *Protocol, side: snow.Side, socket: anytype, reader: anytype) !void {
+    const Self = @This();
+
+    pub fn handshake(self: *Self, side: snow.Side, socket: anytype) !void {
+        return {};
+    }
+
+    pub fn read(self: *Self, side: snow.Side, socket: anytype, reader: anytype) !void {
         while (true) {
             const line = try reader.readLine();
             defer reader.shift(line.len);
+
+            // Do something with the frame here!
         }
     }
 
-    pub fn write(self: *Protocol, side: snow.Side, socket: anytype, writer: anytype, items: [][]const u8) !void {
+    pub fn write(self: *Self, side: snow.Side, socket: anytype, writer: anytype, items: [][]const u8) !void {
         for (items) |message| {
             if (mem.indexOfScalar(u8, message, '\n') != null) {
                 return error.UnexpectedDelimiter;

@@ -11,7 +11,7 @@ pub const Side = packed enum(u1) {
     server,
 };
 
-pub const Options = packed struct {
+pub const Options = struct {
     max_connections_per_client: usize = 16,
     max_connections_per_server: usize = 128,
 

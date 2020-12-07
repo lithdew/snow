@@ -78,7 +78,7 @@ pub fn Client(comptime opts: Options) type {
             try conn.socket.inner.registerTo(self.notifier);
             try conn.socket.inner.connect(conn.socket.address);
 
-            if (comptime meta.trait.hasFn("handshake")(Protocol)) {
+            if (comptime meta.trait.hasFn("handshake")(meta.Child(Protocol))) {
                 conn.socket.context = try self.protocol.handshake(.client, &conn.socket);
             }
 
