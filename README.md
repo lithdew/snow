@@ -58,6 +58,9 @@ const Protocol = struct {
 
     // This gets called when data is queued and ready to be encoded and written to
     // a connection!
+    //
+    // Rather than '[]const u8', custom message types may be set to be queuable to the
+    // connections write queue by setting snow.Option.message_type.
     pub fn write(self: *Self, side: snow.Side, socket: anytype, writer: anytype, items: [][]const u8) !void {
         for (items) |message| {
             if (mem.indexOfScalar(u8, message, '\n') != null) {
