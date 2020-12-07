@@ -54,6 +54,10 @@ pub fn Client(comptime opts: Options) type {
             }
 
             for (pool[0..pool_len]) |conn| {
+                if (comptime meta.trait.hasFn("close")(meta.Child(Protocol))) {
+                    self.protocol.close(.client, &conn.socket);
+                }
+
                 conn.socket.deinit();
                 await conn.frame catch {};
                 self.allocator.destroy(conn);
@@ -146,6 +150,10 @@ pub fn Client(comptime opts: Options) type {
             yield();
 
             defer if (self.deleteConnection(conn)) {
+                if (comptime meta.trait.hasFn("close")(meta.Child(Protocol))) {
+                    self.protocol.close(.client, &conn.socket);
+                }
+
                 conn.socket.inner.deinit();
                 suspend {
                     self.allocator.destroy(conn);

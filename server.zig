@@ -73,6 +73,10 @@ pub fn Server(comptime opts: Options) type {
             }
 
             for (pool[0..pool_len]) |conn| {
+                if (comptime meta.trait.hasFn("close")(meta.Child(Protocol))) {
+                    self.protocol.close(.server, &conn.socket);
+                }
+
                 conn.socket.deinit();
                 await conn.frame catch {};
                 self.allocator.destroy(conn);
@@ -134,14 +138,6 @@ pub fn Server(comptime opts: Options) type {
             conn.frame = async self.runConnection(conn);
         }
 
-        fn deinitConnection(self: *Self, conn: *Connection) void {
-            if (self.deleteConnection(conn)) {
-                conn.socket.deinit();
-                await conn.frame catch {};
-                self.allocator.destroy(conn);
-            }
-        }
-
         fn deleteConnection(self: *Self, conn: *Connection) bool {
             const held = self.lock.acquire();
             defer held.release();
@@ -159,6 +155,10 @@ pub fn Server(comptime opts: Options) type {
 
         fn runConnection(self: *Self, conn: *Connection) !void {
             defer if (self.deleteConnection(conn)) {
+                if (comptime meta.trait.hasFn("close")(meta.Child(Protocol))) {
+                    self.protocol.close(.server, &conn.socket);
+                }
+
                 conn.socket.inner.deinit();
                 suspend {
                     self.allocator.destroy(conn);

@@ -22,6 +22,10 @@ test "client / server" {
             return {};
         }
 
+        pub fn close(self: *Self, side: snow.Side, socket: anytype) void {
+            return {};
+        }
+
         pub fn read(self: *Self, side: snow.Side, socket: anytype, reader: anytype) !void {
             while (true) {
                 const line = try reader.readLine();
