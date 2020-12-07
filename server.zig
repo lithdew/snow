@@ -117,7 +117,7 @@ pub fn Server(comptime opts: Options) type {
             conn.socket = ServerSocket.init(peer.socket, peer.address);
             errdefer conn.socket.deinit();
 
-            try conn.socket.inner.registerTo(self.notifier);
+            try conn.socket.unwrap().registerTo(self.notifier);
 
             if (comptime meta.trait.hasFn("handshake")(meta.Child(Protocol))) {
                 conn.socket.context = try self.protocol.handshake(.server, &conn.socket);
@@ -159,7 +159,7 @@ pub fn Server(comptime opts: Options) type {
                     self.protocol.close(.server, &conn.socket);
                 }
 
-                conn.socket.inner.deinit();
+                conn.socket.unwrap().deinit();
                 suspend {
                     self.allocator.destroy(conn);
                 }

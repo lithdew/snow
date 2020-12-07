@@ -79,8 +79,8 @@ pub fn Client(comptime opts: Options) type {
             );
             errdefer conn.socket.deinit();
 
-            try conn.socket.inner.registerTo(self.notifier);
-            try conn.socket.inner.connect(conn.socket.address);
+            try conn.socket.unwrap().registerTo(self.notifier);
+            try conn.socket.unwrap().connect(conn.socket.address);
 
             if (comptime meta.trait.hasFn("handshake")(meta.Child(Protocol))) {
                 conn.socket.context = try self.protocol.handshake(.client, &conn.socket);
@@ -154,7 +154,7 @@ pub fn Client(comptime opts: Options) type {
                     self.protocol.close(.client, &conn.socket);
                 }
 
-                conn.socket.inner.deinit();
+                conn.socket.unwrap().deinit();
                 suspend {
                     self.allocator.destroy(conn);
                 }

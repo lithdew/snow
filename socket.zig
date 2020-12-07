@@ -55,10 +55,6 @@ pub fn Socket(comptime side: Side, comptime opts: Options) type {
         pub fn deinit(self: *Self) void {
             self.write_queue.close();
             self.inner.deinit();
-
-            if (comptime meta.trait.hasFn("deinit")(Context)) {
-                self.context.deinit();
-            }
         }
 
         pub inline fn unwrap(self: *Self) *pike.Socket {

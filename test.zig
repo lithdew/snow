@@ -13,11 +13,6 @@ test "client / server" {
 
         event: sync.Event = .{},
 
-        pub fn deinit(self: *Self) void {
-            self.event.notify();
-            self.* = undefined;
-        }
-
         pub fn handshake(self: *Self, side: snow.Side, socket: anytype) !void {
             return {};
         }
@@ -85,7 +80,6 @@ test "client / server" {
     defer notifier.deinit();
 
     var protocol: Protocol = .{};
-    defer protocol.deinit();
 
     var stopped = false;
     var frame = async Test.run(&notifier, &protocol, &stopped);
