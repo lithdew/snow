@@ -12,6 +12,34 @@ It also allows you to specify:
 2. a sequence of steps to be performed before successfully establishing a connection (a handshake protocol), and
 3. an upper bound to the maximum number of connections a `Client` / `Server` may pool in total.
 
+## Usage
+
+In your `build.zig`:
+
+```zig
+const std = @import("std");
+
+const Builder = std.build.Builder;
+
+const pkgs = struct {
+    const pike = std.build.Pkg{
+        .name = "pike",
+        .path = "pike/pike.zig",
+    };
+
+    const snow = std.build.Pkg{
+        .name = "snow",
+        .path = "snow/snow.zig",
+    };
+};
+
+pub fn build(b: *Builder) void {
+    // Given a build step...
+    step.addPackage(pkgs.pike);
+    step.addPackage(pkgs.snow);
+}
+```
+
 ## Protocol
 
 Applications written with _snow_ provide a `Protocol` implementation which specifies how message are encoded / decoded into frames.

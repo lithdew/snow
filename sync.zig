@@ -1,5 +1,5 @@
 const std = @import("std");
-const pike = @import("pike/pike.zig");
+const pike = @import("pike");
 
 const mem = std.mem;
 

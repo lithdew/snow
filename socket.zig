@@ -1,7 +1,7 @@
 const std = @import("std");
 const io = @import("io.zig");
 const sync = @import("sync.zig");
-const pike = @import("pike/pike.zig");
+const pike = @import("pike");
 
 const net = std.net;
 const meta = std.meta;
