@@ -30,6 +30,9 @@ const pkgs = struct {
     const snow = std.build.Pkg{
         .name = "snow",
         .path = "snow/snow.zig",
+        .dependencies = &[_]std.build.Pkg{
+            pike,
+        }
     };
 };
 
