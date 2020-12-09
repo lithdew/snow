@@ -69,6 +69,35 @@ pub fn Client(comptime opts: Options) type {
             try conn.socket.write(message);
         }
 
+        pub fn getConnection(self: *Self) !*Connection {
+            const held = self.lock.acquire();
+            defer held.release();
+
+            if (self.done) return error.OperationCancelled;
+
+            var pool = self.pool[0..self.pool_len];
+            if (pool.len == 0) return self.initConnection();
+
+            var min_conn = pool[0];
+            var min_pending = min_conn.socket.write_queue.pending();
+            if (min_pending == 0) return min_conn;
+
+            for (pool[1..]) |conn| {
+                const pending = conn.socket.write_queue.pending();
+                if (pending == 0) return conn;
+                if (pending < min_pending) {
+                    min_conn = conn;
+                    min_pending = pending;
+                }
+            }
+
+            if (pool.len < opts.max_connections_per_client) {
+                return self.initConnection();
+            }
+
+            return min_conn;
+        }
+
         fn initConnection(self: *Self) !*Connection {
             const conn = try self.allocator.create(Connection);
             errdefer self.allocator.destroy(conn);
@@ -115,35 +144,6 @@ pub fn Client(comptime opts: Options) type {
             }
 
             return false;
-        }
-
-        fn getConnection(self: *Self) !*Connection {
-            const held = self.lock.acquire();
-            defer held.release();
-
-            if (self.done) return error.OperationCancelled;
-
-            var pool = self.pool[0..self.pool_len];
-            if (pool.len == 0) return self.initConnection();
-
-            var min_conn = pool[0];
-            var min_pending = min_conn.socket.write_queue.pending();
-            if (min_pending == 0) return min_conn;
-
-            for (pool[1..]) |conn| {
-                const pending = conn.socket.write_queue.pending();
-                if (pending == 0) return conn;
-                if (pending < min_pending) {
-                    min_conn = conn;
-                    min_pending = pending;
-                }
-            }
-
-            if (pool.len < opts.max_connections_per_client) {
-                return self.initConnection();
-            }
-
-            return min_conn;
         }
 
         fn runConnection(self: *Self, conn: *Connection) !void {
