@@ -3,39 +3,6 @@ const pike = @import("pike");
 
 const mem = std.mem;
 
-pub const Counter = struct {
-    const Self = @This();
-
-    state: isize = 0,
-    event: Event = .{},
-
-    pub fn add(self: *Self, delta: isize) void {
-        var state = @atomicLoad(isize, &self.state, .Monotonic);
-        var new_state: isize = 0;
-
-        while (true) {
-            new_state = state + delta;
-
-            state = @cmpxchgWeak(
-                isize,
-                &self.state,
-                state,
-                new_state,
-                .Monotonic,
-                .Monotonic,
-            ) orelse break;
-        }
-
-        if (new_state == 0) {
-            self.event.notify();
-        }
-    }
-
-    pub fn wait(self: *Self) void {
-        self.event.wait();
-    }
-};
-
 pub fn Queue(comptime T: type, comptime capacity: comptime_int) type {
     return struct {
         items: [capacity]T = undefined,

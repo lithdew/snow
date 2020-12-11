@@ -33,7 +33,6 @@ pub fn Server(comptime opts: Options) type {
         pool: [opts.max_connections_per_server]*Connection = undefined,
         pool_len: usize = 0,
 
-        counter: sync.Counter = .{},
         frame: @Frame(Self.run) = undefined,
 
         pub fn init(protocol: Protocol, allocator: *mem.Allocator, notifier: *const pike.Notifier, address: net.Address) !Self {
@@ -154,8 +153,6 @@ pub fn Server(comptime opts: Options) type {
         fn runConnection(self: *Self, conn: *Connection) !void {
             yield();
 
-            self.counter.add(1);
-
             defer if (self.deleteConnection(conn)) {
                 if (comptime meta.trait.hasFn("close")(meta.Child(Protocol))) {
                     self.protocol.close(.server, &conn.socket);
@@ -163,7 +160,6 @@ pub fn Server(comptime opts: Options) type {
 
                 conn.socket.unwrap().deinit();
                 suspend {
-                    self.counter.add(-1);
                     self.allocator.destroy(conn);
                 }
             };
