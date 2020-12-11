@@ -161,8 +161,9 @@ pub fn Client(comptime opts: Options) type {
         }
 
         fn deleteConnection(self: *Self, conn: *Connection) bool {
-            // const held = self.lock.acquire();
-            // defer held.release();
+            const held = self.lock.acquire();
+            defer held.release();
+            
             var pool = self.pool[0..self.pool_len];
 
             if (mem.indexOfScalar(*Connection, pool, conn)) |i| {
