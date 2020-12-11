@@ -1,5 +1,6 @@
 const std = @import("std");
 const pike = @import("pike");
+const sync = @import("sync.zig");
 
 const os = std.os;
 const net = std.net;
@@ -32,6 +33,7 @@ pub fn Server(comptime opts: Options) type {
         pool: [opts.max_connections_per_server]*Connection = undefined,
         pool_len: usize = 0,
 
+        counter: sync.Counter = .{},
         frame: @Frame(Self.run) = undefined,
 
         pub fn init(protocol: Protocol, allocator: *mem.Allocator, notifier: *const pike.Notifier, address: net.Address) !Self {
@@ -109,7 +111,6 @@ pub fn Server(comptime opts: Options) type {
         }
 
         fn accept(self: *Self) !void {
-            errdefer |err| std.debug.print("oh no\n", .{});
             const conn = try self.allocator.create(Connection);
             errdefer self.allocator.destroy(conn);
 
@@ -124,7 +125,7 @@ pub fn Server(comptime opts: Options) type {
                 const held = self.lock.acquire();
                 defer held.release();
 
-                if (self.pool_len == opts.max_connections_per_server) {
+                if (self.pool_len + 1 == opts.max_connections_per_server) {
                     return error.MaxConnectionLimitExceeded;
                 }
 
@@ -152,7 +153,9 @@ pub fn Server(comptime opts: Options) type {
 
         fn runConnection(self: *Self, conn: *Connection) !void {
             yield();
-            
+
+            self.counter.add(1);
+
             defer if (self.deleteConnection(conn)) {
                 if (comptime meta.trait.hasFn("close")(meta.Child(Protocol))) {
                     self.protocol.close(.server, &conn.socket);
@@ -160,6 +163,7 @@ pub fn Server(comptime opts: Options) type {
 
                 conn.socket.unwrap().deinit();
                 suspend {
+                    self.counter.add(-1);
                     self.allocator.destroy(conn);
                 }
             };

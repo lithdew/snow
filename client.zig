@@ -1,10 +1,12 @@
 const std = @import("std");
 const pike = @import("pike");
+const sync = @import("sync.zig");
 
 const os = std.os;
 const net = std.net;
 const mem = std.mem;
 const meta = std.meta;
+const atomic = std.atomic;
 const testing = std.testing;
 
 usingnamespace @import("socket.zig");
@@ -31,6 +33,8 @@ pub fn Client(comptime opts: Options) type {
 
         pool: [opts.max_connections_per_client]*Connection = undefined,
         pool_len: usize = 0,
+
+        counter: sync.Counter = .{},
 
         pub fn init(protocol: Protocol, allocator: *mem.Allocator, notifier: *const pike.Notifier, address: net.Address) Self {
             return Self{ .protocol = protocol, .allocator = allocator, .notifier = notifier, .address = address };
@@ -62,6 +66,8 @@ pub fn Client(comptime opts: Options) type {
                 await conn.frame catch {};
                 self.allocator.destroy(conn);
             }
+
+            self.counter.wait();
         }
 
         pub fn write(self: *Self, message: opts.message_type) !void {
@@ -123,14 +129,6 @@ pub fn Client(comptime opts: Options) type {
             return conn;
         }
 
-        fn deinitConnection(self: *Self, conn: *Connection) void {
-            if (self.deleteConnection(conn)) {
-                conn.socket.deinit();
-                await conn.frame catch {};
-                self.allocator.destroy(conn);
-            }
-        }
-
         fn deleteConnection(self: *Self, conn: *Connection) bool {
             const held = self.lock.acquire();
             defer held.release();
@@ -149,6 +147,8 @@ pub fn Client(comptime opts: Options) type {
         fn runConnection(self: *Self, conn: *Connection) !void {
             yield();
 
+            self.counter.add(1);
+
             defer if (self.deleteConnection(conn)) {
                 if (comptime meta.trait.hasFn("close")(meta.Child(Protocol))) {
                     self.protocol.close(.client, &conn.socket);
@@ -156,6 +156,7 @@ pub fn Client(comptime opts: Options) type {
 
                 conn.socket.unwrap().deinit();
                 suspend {
+                    self.counter.add(-1);
                     self.allocator.destroy(conn);
                 }
             };

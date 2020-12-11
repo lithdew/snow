@@ -1,7 +1,7 @@
 const std = @import("std");
+const pike = @import("pike");
 const io = @import("io.zig");
 const sync = @import("sync.zig");
-const pike = @import("pike");
 
 const net = std.net;
 const meta = std.meta;
@@ -53,7 +53,6 @@ pub fn Socket(comptime side: Side, comptime opts: Options) type {
         }
 
         pub fn deinit(self: *Self) void {
-            self.write_queue.close();
             self.inner.deinit();
         }
 
@@ -69,7 +68,10 @@ pub fn Socket(comptime side: Side, comptime opts: Options) type {
             var reader = Reader.init(self.unwrap());
 
             var writer = async self.runWriter(protocol);
-            defer await writer catch {};
+            defer {
+                self.write_queue.close();
+                await writer catch {};
+            }
 
             yield();
 
@@ -79,8 +81,6 @@ pub fn Socket(comptime side: Side, comptime opts: Options) type {
         fn runWriter(self: *Self, protocol: Protocol) !void {
             var writer = Writer.init(self.unwrap());
             var queue: @TypeOf(self.write_queue.items) = undefined;
-
-            yield();
 
             while (true) {
                 const num_items = try self.write_queue.pop(queue[0..]);
