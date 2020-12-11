@@ -151,6 +151,8 @@ pub fn Server(comptime opts: Options) type {
         }
 
         fn runConnection(self: *Self, conn: *Connection) !void {
+            yield();
+            
             defer if (self.deleteConnection(conn)) {
                 if (comptime meta.trait.hasFn("close")(meta.Child(Protocol))) {
                     self.protocol.close(.server, &conn.socket);
