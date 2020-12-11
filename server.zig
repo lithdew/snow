@@ -1,5 +1,6 @@
 const std = @import("std");
 const pike = @import("pike");
+const sync = @import("sync.zig");
 
 const os = std.os;
 const net = std.net;
@@ -13,10 +14,16 @@ pub fn Server(comptime opts: Options) type {
     return struct {
         const Self = @This();
 
+        const Node = struct {
+            ptr: *Connection,
+            next: ?*Node = null,
+        };
+
         const ServerSocket = Socket(.server, opts);
         const Protocol = opts.protocol_type;
 
         pub const Connection = struct {
+            node: Node,
             socket: ServerSocket,
             frame: @Frame(Self.runConnection),
         };
@@ -31,6 +38,9 @@ pub fn Server(comptime opts: Options) type {
 
         pool: [opts.max_connections_per_server]*Connection = undefined,
         pool_len: usize = 0,
+
+        cleanup_counter: sync.Counter = .{},
+        cleanup_queue: ?*Node = null,
 
         frame: @Frame(Self.run) = undefined,
 
@@ -51,11 +61,15 @@ pub fn Server(comptime opts: Options) type {
         }
 
         pub fn deinit(self: *Self) void {
-            if (!self.done.xchg(true, .SeqCst)) {
-                self.socket.deinit();
-                await self.frame catch {};
-                self.close();
-            }
+            if (self.done.xchg(true, .SeqCst)) return;
+
+            self.socket.deinit();
+            await self.frame catch {};
+
+            self.close();
+
+            self.cleanup_counter.wait();
+            self.purge();
         }
 
         pub fn close(self: *Self) void {
@@ -78,9 +92,27 @@ pub fn Server(comptime opts: Options) type {
                 }
 
                 conn.socket.deinit();
-                await conn.frame catch {};
-                self.allocator.destroy(conn);
             }
+        }
+
+        pub fn purge(self: *Self) void {
+            const held = self.lock.acquire();
+            defer held.release();
+
+            while (self.cleanup_queue) |head| {
+                await head.ptr.frame catch {};
+
+                self.cleanup_queue = head.next;
+                self.allocator.destroy(head.ptr);
+            }
+        }
+
+        fn cleanup(self: *Self, node: *Node) void {
+            const held = self.lock.acquire();
+            defer held.release();
+
+            node.next = self.cleanup_queue;
+            self.cleanup_queue = node;
         }
 
         pub fn serve(self: *Self) !void {
@@ -105,12 +137,16 @@ pub fn Server(comptime opts: Options) type {
                         continue;
                     },
                 };
+
+                self.purge();
             }
         }
 
         fn accept(self: *Self) !void {
             const conn = try self.allocator.create(Connection);
             errdefer self.allocator.destroy(conn);
+
+            conn.node = .{ .ptr = conn };
 
             const peer = try self.socket.accept();
 
@@ -150,22 +186,26 @@ pub fn Server(comptime opts: Options) type {
         }
 
         fn runConnection(self: *Self, conn: *Connection) !void {
-            yield();
+            self.cleanup_counter.add(1);
 
-            defer if (self.deleteConnection(conn)) {
-                if (comptime meta.trait.hasFn("close")(meta.Child(Protocol))) {
-                    self.protocol.close(.server, &conn.socket);
+            defer {
+                if (self.deleteConnection(conn)) {
+                    if (comptime meta.trait.hasFn("close")(meta.Child(Protocol))) {
+                        self.protocol.close(.server, &conn.socket);
+                    }
+
+                    conn.socket.unwrap().deinit();
                 }
 
-                conn.socket.unwrap().deinit();
-                suspend {
-                    self.allocator.destroy(conn);
-                }
-            };
+                self.cleanup(&conn.node);
+                self.cleanup_counter.add(-1);
+            }
 
             if (comptime meta.trait.hasFn("handshake")(meta.Child(Protocol))) {
                 conn.socket.context = try self.protocol.handshake(.server, &conn.socket);
             }
+
+            yield();
 
             try conn.socket.run(self.protocol);
         }
