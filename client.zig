@@ -1,5 +1,6 @@
 const std = @import("std");
 const pike = @import("pike");
+const sync = @import("sync.zig");
 
 const os = std.os;
 const net = std.net;
@@ -13,10 +14,16 @@ pub fn Client(comptime opts: Options) type {
     return struct {
         const Self = @This();
 
+        const Node = struct {
+            ptr: *Connection,
+            next: ?*Node = null,
+        };
+
         const ClientSocket = Socket(.client, opts);
         const Protocol = opts.protocol_type;
 
         pub const Connection = struct {
+            node: Node,
             socket: ClientSocket,
             frame: @Frame(Self.runConnection),
         };
@@ -32,6 +39,9 @@ pub fn Client(comptime opts: Options) type {
         pool: [opts.max_connections_per_client]*Connection = undefined,
         pool_len: usize = 0,
 
+        cleanup_counter: sync.Counter = .{},
+        cleanup_queue: ?*Node = null,
+
         pub fn init(protocol: Protocol, allocator: *mem.Allocator, notifier: *const pike.Notifier, address: net.Address) Self {
             return Self{ .protocol = protocol, .allocator = allocator, .notifier = notifier, .address = address };
         }
@@ -44,8 +54,11 @@ pub fn Client(comptime opts: Options) type {
                 const held = self.lock.acquire();
                 defer held.release();
 
-                if (self.done) return;
-                self.done = true;
+                if (self.done) {
+                    return;
+                } else {
+                    self.done = true;
+                }
 
                 pool = self.pool;
                 pool_len = self.pool_len;
@@ -59,9 +72,29 @@ pub fn Client(comptime opts: Options) type {
                 }
 
                 conn.socket.deinit();
-                await conn.frame catch {};
-                self.allocator.destroy(conn);
             }
+
+            self.cleanup_counter.wait();
+            self.purge();
+        }
+
+        pub fn purge(self: *Self) void {
+            const held = self.lock.acquire();
+            defer held.release();
+
+            while (self.cleanup_queue) |head| {
+                await head.ptr.frame catch {};
+                self.cleanup_queue = head.next;
+                self.allocator.destroy(head.ptr);
+            }
+        }
+
+        fn cleanup(self: *Self, node: *Node) void {
+            const held = self.lock.acquire();
+            defer held.release();
+
+            node.next = self.cleanup_queue;
+            self.cleanup_queue = node;
         }
 
         pub fn write(self: *Self, message: opts.message_type) !void {
@@ -70,6 +103,8 @@ pub fn Client(comptime opts: Options) type {
         }
 
         pub fn getConnection(self: *Self) !*Connection {
+            defer self.purge();
+
             const held = self.lock.acquire();
             defer held.release();
 
@@ -102,6 +137,8 @@ pub fn Client(comptime opts: Options) type {
             const conn = try self.allocator.create(Connection);
             errdefer self.allocator.destroy(conn);
 
+            conn.node = .{ .ptr = conn };
+
             conn.socket = ClientSocket.init(
                 try pike.Socket.init(os.AF_INET, os.SOCK_STREAM, os.IPPROTO_TCP, 0),
                 self.address,
@@ -124,9 +161,8 @@ pub fn Client(comptime opts: Options) type {
         }
 
         fn deleteConnection(self: *Self, conn: *Connection) bool {
-            const held = self.lock.acquire();
-            defer held.release();
-
+            // const held = self.lock.acquire();
+            // defer held.release();
             var pool = self.pool[0..self.pool_len];
 
             if (mem.indexOfScalar(*Connection, pool, conn)) |i| {
@@ -139,18 +175,22 @@ pub fn Client(comptime opts: Options) type {
         }
 
         fn runConnection(self: *Self, conn: *Connection) !void {
+            self.cleanup_counter.add(1);
+
+            defer {
+                if (self.deleteConnection(conn)) {
+                    if (comptime meta.trait.hasFn("close")(meta.Child(Protocol))) {
+                        self.protocol.close(.client, &conn.socket);
+                    }
+
+                    conn.socket.unwrap().deinit();
+                }
+
+                self.cleanup(&conn.node);
+                self.cleanup_counter.add(-1);
+            }
+
             yield();
-
-            defer if (self.deleteConnection(conn)) {
-                if (comptime meta.trait.hasFn("close")(meta.Child(Protocol))) {
-                    self.protocol.close(.client, &conn.socket);
-                }
-
-                conn.socket.unwrap().deinit();
-                suspend {
-                    self.allocator.destroy(conn);
-                }
-            };
 
             try conn.socket.run(self.protocol);
         }
