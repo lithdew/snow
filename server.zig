@@ -109,6 +109,7 @@ pub fn Server(comptime opts: Options) type {
         }
 
         fn accept(self: *Self) !void {
+            errdefer |err| std.debug.print("oh no\n", .{});
             const conn = try self.allocator.create(Connection);
             errdefer self.allocator.destroy(conn);
 
@@ -118,10 +119,6 @@ pub fn Server(comptime opts: Options) type {
             errdefer conn.socket.deinit();
 
             try conn.socket.unwrap().registerTo(self.notifier);
-
-            if (comptime meta.trait.hasFn("handshake")(meta.Child(Protocol))) {
-                conn.socket.context = try self.protocol.handshake(.server, &conn.socket);
-            }
 
             {
                 const held = self.lock.acquire();
@@ -164,6 +161,10 @@ pub fn Server(comptime opts: Options) type {
                     self.allocator.destroy(conn);
                 }
             };
+
+            if (comptime meta.trait.hasFn("handshake")(meta.Child(Protocol))) {
+                conn.socket.context = try self.protocol.handshake(.server, &conn.socket);
+            }
 
             try conn.socket.run(self.protocol);
         }
