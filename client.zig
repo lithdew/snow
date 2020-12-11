@@ -1,12 +1,10 @@
 const std = @import("std");
 const pike = @import("pike");
-const sync = @import("sync.zig");
 
 const os = std.os;
 const net = std.net;
 const mem = std.mem;
 const meta = std.meta;
-const atomic = std.atomic;
 const testing = std.testing;
 
 usingnamespace @import("socket.zig");

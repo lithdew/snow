@@ -1,6 +1,5 @@
 const std = @import("std");
 const pike = @import("pike");
-const sync = @import("sync.zig");
 
 const os = std.os;
 const net = std.net;
