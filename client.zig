@@ -152,15 +152,14 @@ pub fn Client(comptime opts: Options) type {
             try conn.socket.unwrap().registerTo(self.notifier);
             try conn.socket.unwrap().connect(conn.socket.address);
 
-            conn.frame = async self.runConnection(conn);
-            errdefer await conn.frame catch {};
-
             if (comptime meta.trait.hasFn("handshake")(meta.Child(Protocol))) {
                 conn.socket.context = try self.protocol.handshake(.client, &conn.socket);
             }
 
             self.pool[self.pool_len] = conn;
             self.pool_len += 1;
+
+            conn.frame = async self.runConnection(conn);
 
             return conn;
         }
