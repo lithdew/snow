@@ -97,6 +97,10 @@ pub fn Client(comptime opts: Options) type {
             self.cleanup_queue = node;
         }
 
+        pub fn bootstrap(self: *Self) !void {
+            _ = try self.getConnection();
+        }
+
         pub fn write(self: *Self, message: opts.message_type) !void {
             const conn = try self.getConnection();
             try conn.socket.write(message);
