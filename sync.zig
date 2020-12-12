@@ -32,7 +32,9 @@ pub const Counter = struct {
     }
 
     pub fn wait(self: *Self) void {
-        self.event.wait();
+        if (@atomicLoad(isize, &self.state, .Monotonic) > 0) {
+            self.event.wait();
+        }
     }
 };
 
