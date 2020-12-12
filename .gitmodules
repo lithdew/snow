@@ -1,6 +1,0 @@
-[submodule "pike"]
-	path = pike
-	url = https://github.com/lithdew/pike
-[submodule "zap"]
-	path = zap
-	url = https://github.com/lithdew/zap
