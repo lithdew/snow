@@ -143,6 +143,9 @@ pub fn Server(comptime opts: Options) type {
         }
 
         fn accept(self: *Self) !void {
+            self.cleanup_counter.add(1);
+            errdefer self.cleanup_counter.add(-1);
+
             const conn = try self.allocator.create(Connection);
             errdefer self.allocator.destroy(conn);
 
@@ -186,8 +189,6 @@ pub fn Server(comptime opts: Options) type {
         }
 
         fn runConnection(self: *Self, conn: *Connection) !void {
-            self.cleanup_counter.add(1);
-
             defer {
                 if (self.deleteConnection(conn)) {
                     if (comptime meta.trait.hasFn("close")(meta.Child(Protocol))) {
@@ -201,11 +202,11 @@ pub fn Server(comptime opts: Options) type {
                 self.cleanup_counter.add(-1);
             }
 
+            yield();
+
             if (comptime meta.trait.hasFn("handshake")(meta.Child(Protocol))) {
                 conn.socket.context = try self.protocol.handshake(.server, &conn.socket);
             }
-
-            yield();
 
             try conn.socket.run(self.protocol);
         }
