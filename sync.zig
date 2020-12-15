@@ -91,7 +91,7 @@ pub fn Queue(comptime T: type, comptime capacity: comptime_int) type {
                     return popped;
                 }
 
-                if (@atomicLoad(bool, &self.dead, .Acquire)) {
+                if (@atomicLoad(bool, &self.dead, .Monotonic)) {
                     return error.OperationCancelled;
                 }
 
@@ -100,7 +100,7 @@ pub fn Queue(comptime T: type, comptime capacity: comptime_int) type {
         }
 
         pub fn close(self: *Self) void {
-            if (@atomicRmw(bool, &self.dead, .Xchg, true, .Acquire)) {
+            if (@atomicRmw(bool, &self.dead, .Xchg, true, .Monotonic)) {
                 return;
             }
 
