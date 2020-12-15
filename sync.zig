@@ -78,8 +78,6 @@ pub fn Queue(comptime T: type, comptime capacity: comptime_int) type {
                 const popped = tail -% self.head;
 
                 if (popped != 0) {
-                    const item = self.items[self.head % capacity];
-
                     var i: usize = 0;
                     while (i < popped) : (i += 1) {
                         dst[i] = self.items[(self.head + i) % capacity];
