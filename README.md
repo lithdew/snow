@@ -64,9 +64,9 @@ const Protocol = struct {
 
     // This gets called right before a connection is marked to be successfully established!
     //
-    // Feel free to read from / write to the socket here explicitly via '&socket.inner', and
-    // to return an error to prevent a connection from being marked as being successfully
-    // established.
+    // Unlike the rest of the callbacks below, 'socket' is a raw 'pike.Socket'. Feel free to
+    // read / write as much data as you wish, or to return an error to prevent a connection
+    // from being marked as being successfully established.
     //
     // Rather than 'void', snow.Options.context_type may be set and returned from 'handshake'
     // to bootstrap a connection with additional fields and methods under 'socket.context'.
@@ -80,7 +80,10 @@ const Protocol = struct {
     }
 
     // This gets called when a connection's resources is ready to be de-allocated!
-    pub fn purge(self: *Self, comptime side: snow.Side, socket: anytype) void {
+    //
+    // A slice of remaining items in the socket's write queue is passed to purge() to be
+    // optionally deallocated.
+    pub fn purge(self: *Self, comptime side: snow.Side, socket: anytype, items: []const []const u8) void {
         return {};
     }
 

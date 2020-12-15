@@ -21,7 +21,7 @@ test "client / server" {
             return {};
         }
 
-        pub fn purge(self: *Self, comptime side: snow.Side, socket: anytype) void {
+        pub fn purge(self: *Self, comptime side: snow.Side, socket: anytype, items: []const []const u8) void {
             return {};
         }
 

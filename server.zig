@@ -104,7 +104,19 @@ pub fn Server(comptime opts: Options) type {
                 self.cleanup_queue = head.next;
 
                 if (comptime meta.trait.hasFn("purge")(meta.Child(Protocol))) {
-                    self.protocol.purge(.server, &head.ptr.socket);
+                    var items: [opts.write_queue_size]opts.message_type = undefined;
+
+                    const queue = &head.ptr.socket.write_queue;
+                    const remaining = queue.tail -% queue.head;
+
+                    var i: usize = 0;
+                    while (i < remaining) : (i += 1) {
+                        items[i] = queue.items[(queue.head + i) % queue.items.len];
+                    }
+
+                    queue.head = queue.tail;
+
+                    self.protocol.purge(.server, &head.ptr.socket, items[0..remaining]);
                 }
 
                 self.allocator.destroy(head.ptr);
@@ -209,7 +221,7 @@ pub fn Server(comptime opts: Options) type {
             yield();
 
             if (comptime meta.trait.hasFn("handshake")(meta.Child(Protocol))) {
-                conn.socket.context = try self.protocol.handshake(.server, &conn.socket);
+                conn.socket.context = try self.protocol.handshake(.server, &conn.socket.inner);
             }
 
             try conn.socket.run(self.protocol);
