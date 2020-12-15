@@ -85,6 +85,11 @@ pub fn Client(comptime opts: Options) type {
             while (self.cleanup_queue) |head| {
                 await head.ptr.frame catch {};
                 self.cleanup_queue = head.next;
+
+                if (comptime meta.trait.hasFn("purge")(meta.Child(Protocol))) {
+                    self.protocol.purge(.client, &head.ptr.socket);
+                }
+
                 self.allocator.destroy(head.ptr);
             }
         }

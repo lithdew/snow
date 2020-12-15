@@ -63,22 +63,29 @@ const Protocol = struct {
     const Self = @This();
 
     // This gets called right before a connection is marked to be successfully established!
-    // Feel free to read from / write to the socket here, and to return an error to prevent
-    // a connection from being marked as being successfully established.
+    //
+    // Feel free to read from / write to the socket here explicitly via '&socket.inner', and
+    // to return an error to prevent a connection from being marked as being successfully
+    // established.
     //
     // Rather than 'void', snow.Options.context_type may be set and returned from 'handshake'
     // to bootstrap a connection with additional fields and methods under 'socket.context'.
-    pub fn handshake(self: *Self, side: snow.Side, socket: anytype) !void {
+    pub fn handshake(self: *Self, comptime side: snow.Side, socket: anytype) !void {
         return {};
     }
 
     // This gets called before a connection is closed!
-    pub fn close(self: *Self, side: snow.Side, socket: anytype) void {
+    pub fn close(self: *Self, comptime side: snow.Side, socket: anytype) void {
+        return {};
+    }
+
+    // This gets called when a connection's resources is ready to be de-allocated!
+    pub fn purge(self: *Self, comptime side: snow.Side, socket: anytype) void {
         return {};
     }
 
     // This gets called when data is ready to be read from a connection!
-    pub fn read(self: *Self, side: snow.Side, socket: anytype, reader: anytype) !void {
+    pub fn read(self: *Self, comptime side: snow.Side, socket: anytype, reader: anytype) !void {
         while (true) {
             const line = try reader.readLine();
             defer reader.shift(line.len);
@@ -92,7 +99,7 @@ const Protocol = struct {
     //
     // Rather than '[]const u8', custom message types may be set to be queuable to the
     // connections write queue by setting snow.Options.message_type.
-    pub fn write(self: *Self, side: snow.Side, socket: anytype, writer: anytype, items: [][]const u8) !void {
+    pub fn write(self: *Self, comptime side: snow.Side, socket: anytype, writer: anytype, items: [][]const u8) !void {
         for (items) |message| {
             if (mem.indexOfScalar(u8, message, '\n') != null) {
                 return error.UnexpectedDelimiter;
