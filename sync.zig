@@ -156,3 +156,104 @@ pub const Event = struct {
         }
     }
 };
+
+/// Async-friendly Mutex ported from Zig's standard library to be compatible
+/// with scheduling methods exposed by pike.
+pub const Mutex = struct {
+    mutex: std.Mutex = .{},
+    head: usize = UNLOCKED,
+
+    const UNLOCKED = 0;
+    const LOCKED = 1;
+
+    const Waiter = struct {
+        // forced Waiter alignment to ensure it doesn't clash with LOCKED
+        next: ?*Waiter align(2),
+        tail: *Waiter,
+        task: pike.Task,
+    };
+
+    pub fn initLocked() Mutex {
+        return Mutex{ .head = LOCKED };
+    }
+
+    pub fn acquire(self: *Mutex) Held {
+        const held = self.mutex.acquire();
+
+        // self.head transitions from multiple stages depending on the value:
+        // UNLOCKED -> LOCKED:
+        //   acquire Mutex ownership when theres no waiters
+        // LOCKED -> <Waiter head ptr>:
+        //   Mutex is already owned, enqueue first Waiter
+        // <head ptr> -> <head ptr>:
+        //   Mutex is owned with pending waiters. Push our waiter to the queue.
+
+        if (self.head == UNLOCKED) {
+            self.head = LOCKED;
+            held.release();
+            return Held{ .lock = self };
+        }
+
+        var waiter: Waiter = undefined;
+        waiter.next = null;
+        waiter.tail = &waiter;
+
+        const head = switch (self.head) {
+            UNLOCKED => unreachable,
+            LOCKED => null,
+            else => @intToPtr(*Waiter, self.head),
+        };
+
+        if (head) |h| {
+            h.tail.next = &waiter;
+            h.tail = &waiter;
+        } else {
+            self.head = @ptrToInt(&waiter);
+        }
+
+        suspend {
+            waiter.task = pike.Task.init(@frame());
+            held.release();
+        }
+
+        return Held{ .lock = self };
+    }
+
+    pub const Held = struct {
+        lock: *Mutex,
+
+        pub fn release(self: Held) void {
+            const waiter = blk: {
+                const held = self.lock.mutex.acquire();
+                defer held.release();
+
+                // self.head goes through the reverse transition from acquire():
+                // <head ptr> -> <new head ptr>:
+                //   pop a waiter from the queue to give Mutex ownership when theres still others pending
+                // <head ptr> -> LOCKED:
+                //   pop the laster waiter from the queue, while also giving it lock ownership when awaken
+                // LOCKED -> UNLOCKED:
+                //   last lock owner releases lock while no one else is waiting for it
+
+                switch (self.lock.head) {
+                    UNLOCKED => unreachable, // Mutex unlocked while unlocking
+                    LOCKED => {
+                        self.lock.head = UNLOCKED;
+                        break :blk null;
+                    },
+                    else => {
+                        const waiter = @intToPtr(*Waiter, self.lock.head);
+                        self.lock.head = if (waiter.next == null) LOCKED else @ptrToInt(waiter.next);
+                        if (waiter.next) |next|
+                            next.tail = waiter.tail;
+                        break :blk waiter;
+                    },
+                }
+            };
+
+            if (waiter) |w| {
+                pike.dispatch(&w.task, .{});
+            }
+        }
+    };
+};

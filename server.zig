@@ -33,7 +33,7 @@ pub fn Server(comptime opts: Options) type {
         notifier: *const pike.Notifier,
         socket: pike.Socket,
 
-        lock: std.Mutex = .{},
+        lock: sync.Mutex = .{},
         done: atomic.Bool = atomic.Bool.init(false),
 
         pool: [opts.max_connections_per_server]*Connection = undefined,

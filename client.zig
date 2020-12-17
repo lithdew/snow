@@ -33,7 +33,7 @@ pub fn Client(comptime opts: Options) type {
         allocator: *mem.Allocator,
         address: net.Address,
 
-        lock: std.Mutex = .{},
+        lock: sync.Mutex = .{},
         done: bool = false,
 
         pool: [opts.max_connections_per_client]*Connection = undefined,
