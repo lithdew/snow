@@ -160,7 +160,7 @@ pub fn Queue(comptime T: type, comptime capacity: comptime_int) type {
                 if (count != 0) {
                     var i: usize = 0;
                     while (i < count) : (i += 1) {
-                        dst[i] = self.items[(self.head + i) % capacity];
+                        dst[i] = self.items[(self.head +% i) % capacity];
                     }
 
                     self.head = self.tail;
@@ -243,7 +243,7 @@ pub fn Queue(comptime T: type, comptime capacity: comptime_int) type {
 //                 if (popped != 0) {
 //                     var i: usize = 0;
 //                     while (i < popped) : (i += 1) {
-//                         dst[i] = self.items[(self.head + i) % capacity];
+//                         dst[i] = self.items[(self.head +% i) % capacity];
 //                     }
 
 //                     @atomicStore(usize, &self.head, tail, .Release);
