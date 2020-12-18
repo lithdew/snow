@@ -40,73 +40,236 @@ pub const Counter = struct {
 
 pub fn Queue(comptime T: type, comptime capacity: comptime_int) type {
     return struct {
+        const Self = @This();
+
+        const Reader = struct {
+            task: pike.Task,
+            dead: bool = false,
+        };
+
+        const Writer = struct {
+            next: ?*Writer = null,
+            tail: ?*Writer = null,
+            task: pike.Task,
+            dead: bool = false,
+        };
+
+        lock: std.Mutex = .{},
         items: [capacity]T = undefined,
-        reader: Event = .{},
-        writer: Event = .{},
         dead: bool = false,
         head: usize = 0,
         tail: usize = 0,
+        reader: ?*Reader = null,
+        writers: ?*Writer = null,
 
-        const Self = @This();
+        pub fn close(self: *Self) void {
+            const held = self.lock.acquire();
+            if (self.dead) {
+                held.release();
+                return;
+            }
 
-        pub fn pending(self: *const Self) usize {
-            const head = @atomicLoad(usize, &self.head, .Acquire);
-            return self.tail -% head;
+            self.dead = true;
+
+            const maybe_reader = blk: {
+                if (self.reader) |reader| {
+                    self.reader = null;
+                    break :blk reader;
+                }
+                break :blk null;
+            };
+
+            var maybe_writers = blk: {
+                if (self.writers) |writers| {
+                    self.writers = null;
+                    break :blk writers;
+                }
+                break :blk null;
+            };
+
+            held.release();
+
+            if (maybe_reader) |reader| {
+                reader.dead = true;
+                pike.dispatch(&reader.task, .{});
+            }
+
+            while (maybe_writers) |writer| {
+                writer.dead = true;
+                maybe_writers = writer.next;
+                pike.dispatch(&writer.task, .{});
+            }
+        }
+
+        pub fn pending(self: *Self) usize {
+            const held = self.lock.acquire();
+            defer held.release();
+            return self.tail -% self.head;
         }
 
         pub fn push(self: *Self, item: T) !void {
             while (true) {
-                if (@atomicLoad(bool, &self.dead, .Monotonic)) {
-                    return error.OperationCancelled;
+                const held = self.lock.acquire();
+                if (self.dead) {
+                    held.release();
+                    return error.AlreadyShutdown;
                 }
 
-                const head = @atomicLoad(usize, &self.head, .Acquire);
-                if (self.tail -% head < capacity) {
+                if (self.tail -% self.head < capacity) {
                     self.items[self.tail % capacity] = item;
-                    @atomicStore(usize, &self.tail, self.tail +% 1, .Release);
-                    self.reader.notify();
+                    self.tail +%= 1;
+
+                    const maybe_reader = blk: {
+                        if (self.reader) |reader| {
+                            self.reader = null;
+                            break :blk reader;
+                        }
+                        break :blk null;
+                    };
+
+                    held.release();
+
+                    if (maybe_reader) |reader| {
+                        pike.dispatch(&reader.task, .{});
+                    }
+
                     return;
                 }
 
-                self.writer.wait();
+                var writer = Writer{ .task = pike.Task.init(@frame()) };
+
+                suspend {
+                    if (self.writers) |writers| {
+                        writers.tail.?.next = &writer;
+                    } else {
+                        self.writers = &writer;
+                    }
+                    self.writers.?.tail = &writer;
+                    held.release();
+                }
+
+                if (writer.dead) return error.OperationCancelled;
             }
         }
 
         pub fn pop(self: *Self, dst: []T) !usize {
             while (true) {
-                const tail = @atomicLoad(usize, &self.tail, .Acquire);
-                const popped = tail -% self.head;
+                const held = self.lock.acquire();
+                const count = self.tail -% self.head;
 
-                if (popped != 0) {
+                if (count != 0) {
                     var i: usize = 0;
-                    while (i < popped) : (i += 1) {
+                    while (i < count) : (i += 1) {
                         dst[i] = self.items[(self.head + i) % capacity];
                     }
 
-                    @atomicStore(usize, &self.head, tail, .Release);
-                    self.writer.notify();
+                    self.head = self.tail;
 
-                    return popped;
+                    var maybe_writers = blk: {
+                        if (self.writers) |writers| {
+                            self.writers = null;
+                            break :blk writers;
+                        }
+                        break :blk null;
+                    };
+
+                    held.release();
+
+                    while (maybe_writers) |writer| {
+                        maybe_writers = writer.next;
+                        pike.dispatch(&writer.task, .{});
+                    }
+
+                    return count;
                 }
 
-                if (@atomicLoad(bool, &self.dead, .Monotonic)) {
-                    return error.OperationCancelled;
+                if (self.dead) {
+                    held.release();
+                    return error.AlreadyShutdown;
                 }
 
-                self.reader.wait();
-            }
-        }
+                var reader = Reader{ .task = pike.Task.init(@frame()) };
 
-        pub fn close(self: *Self) void {
-            if (@atomicRmw(bool, &self.dead, .Xchg, true, .Monotonic)) {
-                return;
-            }
+                suspend {
+                    self.reader = &reader;
+                    held.release();
+                }
 
-            self.reader.notify();
-            self.writer.notify();
+                if (reader.dead) return error.OperationCancelled;
+            }
         }
     };
 }
+
+// pub fn Queue(comptime T: type, comptime capacity: comptime_int) type {
+//     return struct {
+//         items: [capacity]T = undefined,
+//         reader: Event = .{},
+//         writer: Event = .{},
+//         dead: bool = false,
+//         head: usize = 0,
+//         tail: usize = 0,
+
+//         const Self = @This();
+
+//         pub fn pending(self: *const Self) usize {
+//             const head = @atomicLoad(usize, &self.head, .Acquire);
+//             return self.tail -% head;
+//         }
+
+//         pub fn push(self: *Self, item: T) !void {
+//             while (true) {
+//                 if (@atomicLoad(bool, &self.dead, .Monotonic)) {
+//                     return error.OperationCancelled;
+//                 }
+
+//                 const head = @atomicLoad(usize, &self.head, .Acquire);
+//                 if (self.tail -% head < capacity) {
+//                     self.items[self.tail % capacity] = item;
+//                     @atomicStore(usize, &self.tail, self.tail +% 1, .Release);
+//                     self.reader.notify();
+//                     return;
+//                 }
+
+//                 self.writer.wait();
+//             }
+//         }
+
+//         pub fn pop(self: *Self, dst: []T) !usize {
+//             while (true) {
+//                 const tail = @atomicLoad(usize, &self.tail, .Acquire);
+//                 const popped = tail -% self.head;
+
+//                 if (popped != 0) {
+//                     var i: usize = 0;
+//                     while (i < popped) : (i += 1) {
+//                         dst[i] = self.items[(self.head + i) % capacity];
+//                     }
+
+//                     @atomicStore(usize, &self.head, tail, .Release);
+//                     self.writer.notify();
+
+//                     return popped;
+//                 }
+
+//                 if (@atomicLoad(bool, &self.dead, .Monotonic)) {
+//                     return error.OperationCancelled;
+//                 }
+
+//                 self.reader.wait();
+//             }
+//         }
+
+//         pub fn close(self: *Self) void {
+//             if (@atomicRmw(bool, &self.dead, .Xchg, true, .Monotonic)) {
+//                 return;
+//             }
+
+//             self.reader.notify();
+//             self.writer.notify();
+//         }
+//     };
+// }
 
 pub const Event = struct {
     state: ?*pike.Task = null,
