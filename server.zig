@@ -87,11 +87,11 @@ pub fn Server(comptime opts: Options) type {
             }
 
             for (pool[0..pool_len]) |conn| {
+                conn.socket.deinit();
+
                 if (comptime meta.trait.hasFn("close")(meta.Child(Protocol))) {
                     self.protocol.close(.server, &conn.socket);
                 }
-
-                conn.socket.deinit();
             }
         }
 
@@ -207,11 +207,11 @@ pub fn Server(comptime opts: Options) type {
         fn runConnection(self: *Self, conn: *Connection) !void {
             defer {
                 if (self.deleteConnection(conn)) {
+                    conn.socket.deinit();
+
                     if (comptime meta.trait.hasFn("close")(meta.Child(Protocol))) {
                         self.protocol.close(.server, &conn.socket);
                     }
-
-                    conn.socket.unwrap().deinit();
                 }
 
                 self.cleanup(&conn.node);

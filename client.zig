@@ -67,11 +67,11 @@ pub fn Client(comptime opts: Options) type {
             }
 
             for (pool[0..pool_len]) |conn| {
+                conn.socket.deinit();
+
                 if (comptime meta.trait.hasFn("close")(meta.Child(Protocol))) {
                     self.protocol.close(.client, &conn.socket);
                 }
-
-                conn.socket.deinit();
             }
 
             self.cleanup_counter.wait();
@@ -201,11 +201,11 @@ pub fn Client(comptime opts: Options) type {
 
             defer {
                 if (self.deleteConnection(conn)) {
+                    conn.socket.deinit();
+
                     if (comptime meta.trait.hasFn("close")(meta.Child(Protocol))) {
                         self.protocol.close(.client, &conn.socket);
                     }
-
-                    conn.socket.unwrap().deinit();
                 }
 
                 self.cleanup(&conn.node);
