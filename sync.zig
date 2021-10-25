@@ -54,7 +54,7 @@ pub fn Queue(comptime T: type, comptime capacity: comptime_int) type {
             dead: bool = false,
         };
 
-        lock: std.Mutex = .{},
+        lock: std.Thread.Mutex = .{},
         items: [capacity]T = undefined,
         dead: bool = false,
         head: usize = 0,
@@ -323,7 +323,7 @@ pub const Event = struct {
 /// Async-friendly Mutex ported from Zig's standard library to be compatible
 /// with scheduling methods exposed by pike.
 pub const Mutex = struct {
-    mutex: std.Mutex = .{},
+    mutex: std.Thread.Mutex = .{},
     head: usize = UNLOCKED,
 
     const UNLOCKED = 0;

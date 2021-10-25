@@ -8,9 +8,9 @@ const mem = std.mem;
 const meta = std.meta;
 const testing = std.testing;
 
-usingnamespace @import("socket.zig");
+const snow_sock = @import("socket.zig");
 
-pub fn Client(comptime opts: Options) type {
+pub fn Client(comptime opts: snow_sock.Options) type {
     return struct {
         const Self = @This();
 
@@ -19,7 +19,7 @@ pub fn Client(comptime opts: Options) type {
             next: ?*Node = null,
         };
 
-        const ClientSocket = Socket(.client, opts);
+        const ClientSocket = snow_sock.Socket(.client, opts);
         const Protocol = opts.protocol_type;
 
         pub const Connection = struct {
@@ -212,7 +212,7 @@ pub fn Client(comptime opts: Options) type {
                 self.cleanup_counter.add(-1);
             }
 
-            yield();
+            snow_sock.yield();
 
             try conn.socket.run(self.protocol);
         }

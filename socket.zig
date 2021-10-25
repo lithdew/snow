@@ -6,7 +6,7 @@ const sync = @import("sync.zig");
 const net = std.net;
 const meta = std.meta;
 
-pub const Side = packed enum(u1) {
+pub const Side = enum(u1) {
     client,
     server,
 };
@@ -64,7 +64,7 @@ pub fn Socket(comptime side: Side, comptime opts: Options) type {
             try self.write_queue.push(message);
         }
 
-        pub fn run(self: *Self, protocol: Protocol) !void {
+        pub fn run(self: *Self, protocol: *Protocol) !void {
             var reader = Reader.init(self.unwrap());
 
             var writer = async self.runWriter(protocol);
@@ -75,16 +75,16 @@ pub fn Socket(comptime side: Side, comptime opts: Options) type {
 
             yield();
 
-            try protocol.read(side, self, &reader);
+            try protocol.*.read(side, self, &reader);
         }
 
-        fn runWriter(self: *Self, protocol: Protocol) !void {
+        fn runWriter(self: *Self, protocol: *Protocol) !void {
             var writer = Writer.init(self.unwrap());
             var queue: @TypeOf(self.write_queue.items) = undefined;
 
             while (true) {
                 const num_items = try self.write_queue.pop(queue[0..]);
-                try protocol.write(side, self, &writer, queue[0..num_items]);
+                try protocol.*.write(side, self, &writer, queue[0..num_items]);
             }
         }
     };

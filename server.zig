@@ -8,9 +8,9 @@ const mem = std.mem;
 const meta = std.meta;
 const atomic = std.atomic;
 
-usingnamespace @import("socket.zig");
+const snow_sock = @import("socket.zig");
 
-pub fn Server(comptime opts: Options) type {
+pub fn Server(comptime opts: snow_sock.Options) type {
     return struct {
         const Self = @This();
 
@@ -19,7 +19,7 @@ pub fn Server(comptime opts: Options) type {
             next: ?*Node = null,
         };
 
-        const ServerSocket = Socket(.server, opts);
+        const ServerSocket = snow_sock.Socket(.server, opts);
         const Protocol = opts.protocol_type;
 
         pub const Connection = struct {
@@ -34,7 +34,7 @@ pub fn Server(comptime opts: Options) type {
         socket: pike.Socket,
 
         lock: sync.Mutex = .{},
-        done: atomic.Bool = atomic.Bool.init(false),
+        done: std.atomic.Atomic(bool) = std.atomic.Atomic(bool).init(false),
 
         pool: [opts.max_connections_per_server]*Connection = undefined,
         pool_len: usize = 0,
@@ -49,7 +49,7 @@ pub fn Server(comptime opts: Options) type {
                 .protocol = protocol,
                 .allocator = allocator,
                 .notifier = notifier,
-                .socket = try pike.Socket.init(os.AF_INET, os.SOCK_STREAM, os.IPPROTO_TCP, 0),
+                .socket = try pike.Socket.init(os.AF.INET, os.SOCK.STREAM, os.IPPROTO.TCP, 0),
             };
             errdefer self.socket.deinit();
 
@@ -61,7 +61,7 @@ pub fn Server(comptime opts: Options) type {
         }
 
         pub fn deinit(self: *Self) void {
-            if (self.done.xchg(true, .SeqCst)) return;
+            if (self.done.swap(true, .SeqCst)) return;
 
             self.socket.deinit();
             await self.frame catch {};
@@ -89,7 +89,7 @@ pub fn Server(comptime opts: Options) type {
             for (pool[0..pool_len]) |conn| {
                 conn.socket.deinit();
 
-                if (comptime meta.trait.hasFn("close")(meta.Child(Protocol))) {
+                if (comptime meta.trait.hasFn("close")(Protocol)) {
                     self.protocol.close(.server, &conn.socket);
                 }
             }
@@ -103,7 +103,7 @@ pub fn Server(comptime opts: Options) type {
                 await head.ptr.frame catch {};
                 self.cleanup_queue = head.next;
 
-                if (comptime meta.trait.hasFn("purge")(meta.Child(Protocol))) {
+                if (comptime meta.trait.hasFn("purge")(Protocol)) {
                     var items: [opts.write_queue_size]opts.message_type = undefined;
 
                     const queue = &head.ptr.socket.write_queue;
@@ -137,9 +137,9 @@ pub fn Server(comptime opts: Options) type {
         }
 
         fn run(self: *Self) !void {
-            yield();
+            snow_sock.yield();
 
-            defer if (!self.done.xchg(true, .SeqCst)) {
+            defer if (!self.done.swap(true, .SeqCst)) {
                 self.socket.deinit();
                 self.close();
             };
@@ -209,7 +209,7 @@ pub fn Server(comptime opts: Options) type {
                 if (self.deleteConnection(conn)) {
                     conn.socket.deinit();
 
-                    if (comptime meta.trait.hasFn("close")(meta.Child(Protocol))) {
+                    if (comptime meta.trait.hasFn("close")(Protocol)) {
                         self.protocol.close(.server, &conn.socket);
                     }
                 }
@@ -218,9 +218,9 @@ pub fn Server(comptime opts: Options) type {
                 self.cleanup_counter.add(-1);
             }
 
-            yield();
+            snow_sock.yield();
 
-            if (comptime meta.trait.hasFn("handshake")(meta.Child(Protocol))) {
+            if (comptime meta.trait.hasFn("handshake")(Protocol)) {
                 conn.socket.context = try self.protocol.handshake(.server, &conn.socket.inner);
             }
 
