@@ -89,7 +89,7 @@ pub fn Server(comptime opts: snow_sock.Options) type {
             for (pool[0..pool_len]) |conn| {
                 conn.socket.deinit();
 
-                if (comptime meta.trait.hasFn("close")(Protocol)) {
+                if (comptime meta.trait.hasFn("close")(meta.Child(Protocol))) {
                     self.protocol.close(.server, &conn.socket);
                 }
             }
@@ -103,7 +103,7 @@ pub fn Server(comptime opts: snow_sock.Options) type {
                 await head.ptr.frame catch {};
                 self.cleanup_queue = head.next;
 
-                if (comptime meta.trait.hasFn("purge")(Protocol)) {
+                if (comptime meta.trait.hasFn("purge")(meta.Child(Protocol))) {
                     var items: [opts.write_queue_size]opts.message_type = undefined;
 
                     const queue = &head.ptr.socket.write_queue;
@@ -209,7 +209,7 @@ pub fn Server(comptime opts: snow_sock.Options) type {
                 if (self.deleteConnection(conn)) {
                     conn.socket.deinit();
 
-                    if (comptime meta.trait.hasFn("close")(Protocol)) {
+                    if (comptime meta.trait.hasFn("close")(meta.Child(Protocol))) {
                         self.protocol.close(.server, &conn.socket);
                     }
                 }
@@ -220,7 +220,7 @@ pub fn Server(comptime opts: snow_sock.Options) type {
 
             snow_sock.yield();
 
-            if (comptime meta.trait.hasFn("handshake")(Protocol)) {
+            if (comptime meta.trait.hasFn("handshake")(meta.Child(Protocol))) {
                 conn.socket.context = try self.protocol.handshake(.server, &conn.socket.inner);
             }
 
