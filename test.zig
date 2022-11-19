@@ -3,6 +3,8 @@ const snow = @import("snow.zig");
 const sync = @import("sync.zig");
 const pike = @import("pike");
 
+const print = @import("std").debug.print;
+
 const net = std.net;
 const mem = std.mem;
 const testing = std.testing;
@@ -14,27 +16,41 @@ test "client / server" {
         event: sync.Event = .{},
 
         pub fn handshake(self: *Self, comptime side: snow.Side, socket: anytype) !void {
+            _ = self;
+            _ = side;
+            _ = socket;
             return {};
         }
 
         pub fn close(self: *Self, comptime side: snow.Side, socket: anytype) void {
+            _ = self;
+            _ = side;
+            _ = socket;
             return {};
         }
 
         pub fn purge(self: *Self, comptime side: snow.Side, socket: anytype, items: []const []const u8) void {
+            _ = self;
+            _ = side;
+            _ = socket;
+            _ = items;
             return {};
         }
 
         pub fn read(self: *Self, comptime side: snow.Side, socket: anytype, reader: anytype) !void {
+            _ = socket;
+            _ = side;
             while (true) {
                 const line = try reader.readLine();
                 defer reader.shift(line.len);
-
                 self.event.notify();
             }
         }
 
         pub fn write(self: *Self, comptime side: snow.Side, socket: anytype, writer: anytype, items: [][]const u8) !void {
+            _ = side;
+            _ = self;
+            _ = socket;
             for (items) |message| {
                 if (mem.indexOfScalar(u8, message, '\n') != null) {
                     return error.UnexpectedDelimiter;

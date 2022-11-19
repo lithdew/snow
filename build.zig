@@ -6,6 +6,7 @@ pub fn build(b: *std.build.Builder) void {
     const target = b.standardTargetOptions(.{});
 
     const test_runner = b.addTest("test.zig");
+    test_runner.use_stage1 = true;
     test_runner.setBuildMode(mode);
     test_runner.setTarget(target);
     deps.addAllTo(test_runner);

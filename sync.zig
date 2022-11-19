@@ -54,7 +54,7 @@ pub fn Queue(comptime T: type, comptime capacity: comptime_int) type {
             dead: bool = false,
         };
 
-        lock: std.Mutex = .{},
+        lock: std.Thread.Mutex = .{},
         items: [capacity]T = undefined,
         dead: bool = false,
         head: usize = 0,
@@ -63,9 +63,9 @@ pub fn Queue(comptime T: type, comptime capacity: comptime_int) type {
         writers: ?*Writer = null,
 
         pub fn close(self: *Self) void {
-            const held = self.lock.acquire();
+            self.lock.lock();
             if (self.dead) {
-                held.release();
+                self.lock.unlock();
                 return;
             }
 
@@ -87,7 +87,7 @@ pub fn Queue(comptime T: type, comptime capacity: comptime_int) type {
                 break :blk null;
             };
 
-            held.release();
+            self.lock.unlock();
 
             if (maybe_reader) |reader| {
                 reader.dead = true;
@@ -102,16 +102,16 @@ pub fn Queue(comptime T: type, comptime capacity: comptime_int) type {
         }
 
         pub fn pending(self: *Self) usize {
-            const held = self.lock.acquire();
-            defer held.release();
+            self.lock.lock();
+            defer self.lock.unlock();
             return self.tail -% self.head;
         }
 
         pub fn push(self: *Self, item: T) !void {
             while (true) {
-                const held = self.lock.acquire();
+                self.lock.lock();
                 if (self.dead) {
-                    held.release();
+                    self.lock.unlock();
                     return error.AlreadyShutdown;
                 }
 
@@ -127,7 +127,7 @@ pub fn Queue(comptime T: type, comptime capacity: comptime_int) type {
                         break :blk null;
                     };
 
-                    held.release();
+                    self.lock.unlock();
 
                     if (maybe_reader) |reader| {
                         pike.dispatch(&reader.task, .{});
@@ -145,7 +145,7 @@ pub fn Queue(comptime T: type, comptime capacity: comptime_int) type {
                         self.writers = &writer;
                     }
                     self.writers.?.tail = &writer;
-                    held.release();
+                    self.lock.unlock();
                 }
 
                 if (writer.dead) return error.OperationCancelled;
@@ -154,7 +154,7 @@ pub fn Queue(comptime T: type, comptime capacity: comptime_int) type {
 
         pub fn pop(self: *Self, dst: []T) !usize {
             while (true) {
-                const held = self.lock.acquire();
+                self.lock.lock();
                 const count = self.tail -% self.head;
 
                 if (count != 0) {
@@ -173,7 +173,7 @@ pub fn Queue(comptime T: type, comptime capacity: comptime_int) type {
                         break :blk null;
                     };
 
-                    held.release();
+                    self.lock.unlock();
 
                     while (maybe_writers) |writer| {
                         maybe_writers = writer.next;
@@ -184,7 +184,7 @@ pub fn Queue(comptime T: type, comptime capacity: comptime_int) type {
                 }
 
                 if (self.dead) {
-                    held.release();
+                    self.lock.unlock();
                     return error.AlreadyShutdown;
                 }
 
@@ -192,7 +192,7 @@ pub fn Queue(comptime T: type, comptime capacity: comptime_int) type {
 
                 suspend {
                     self.reader = &reader;
-                    held.release();
+                    self.lock.unlock();
                 }
 
                 if (reader.dead) return error.OperationCancelled;
@@ -323,7 +323,7 @@ pub const Event = struct {
 /// Async-friendly Mutex ported from Zig's standard library to be compatible
 /// with scheduling methods exposed by pike.
 pub const Mutex = struct {
-    mutex: std.Mutex = .{},
+    mutex: std.Thread.Mutex = .{},
     head: usize = UNLOCKED,
 
     const UNLOCKED = 0;
@@ -341,7 +341,7 @@ pub const Mutex = struct {
     }
 
     pub fn acquire(self: *Mutex) Held {
-        const held = self.mutex.acquire();
+        self.mutex.lock();
 
         // self.head transitions from multiple stages depending on the value:
         // UNLOCKED -> LOCKED:
@@ -353,7 +353,7 @@ pub const Mutex = struct {
 
         if (self.head == UNLOCKED) {
             self.head = LOCKED;
-            held.release();
+            self.mutex.unlock();
             return Held{ .lock = self };
         }
 
@@ -376,7 +376,7 @@ pub const Mutex = struct {
 
         suspend {
             waiter.task = pike.Task.init(@frame());
-            held.release();
+            self.mutex.unlock();
         }
 
         return Held{ .lock = self };
@@ -387,8 +387,8 @@ pub const Mutex = struct {
 
         pub fn release(self: Held) void {
             const waiter = blk: {
-                const held = self.lock.mutex.acquire();
-                defer held.release();
+                self.lock.mutex.lock();
+                defer self.lock.mutex.lock();
 
                 // self.head goes through the reverse transition from acquire():
                 // <head ptr> -> <new head ptr>:
