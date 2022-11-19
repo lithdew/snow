@@ -1,6 +1,7 @@
 const std = @import("std");
 const pike = @import("pike");
 const sync = @import("sync.zig");
+const snow = @import("snow.zig");
 
 const os = std.os;
 const net = std.net;
@@ -8,9 +9,7 @@ const mem = std.mem;
 const meta = std.meta;
 const testing = std.testing;
 
-usingnamespace @import("socket.zig");
-
-pub fn Client(comptime opts: Options) type {
+pub fn Client(comptime opts: snow.Options) type {
     return struct {
         const Self = @This();
 
@@ -19,7 +18,7 @@ pub fn Client(comptime opts: Options) type {
             next: ?*Node = null,
         };
 
-        const ClientSocket = Socket(.client, opts);
+        const ClientSocket = snow.Socket(.client, opts);
         const Protocol = opts.protocol_type;
 
         pub const Connection = struct {
@@ -30,7 +29,7 @@ pub fn Client(comptime opts: Options) type {
 
         protocol: Protocol,
         notifier: *const pike.Notifier,
-        allocator: *mem.Allocator,
+        allocator: mem.Allocator,
         address: net.Address,
 
         lock: sync.Mutex = .{},
@@ -42,7 +41,7 @@ pub fn Client(comptime opts: Options) type {
         cleanup_counter: sync.Counter = .{},
         cleanup_queue: ?*Node = null,
 
-        pub fn init(protocol: Protocol, allocator: *mem.Allocator, notifier: *const pike.Notifier, address: net.Address) Self {
+        pub fn init(protocol: Protocol, allocator: mem.Allocator, notifier: *const pike.Notifier, address: net.Address) Self {
             return Self{ .protocol = protocol, .allocator = allocator, .notifier = notifier, .address = address };
         }
 
@@ -161,7 +160,7 @@ pub fn Client(comptime opts: Options) type {
             conn.node = .{ .ptr = conn };
 
             conn.socket = ClientSocket.init(
-                try pike.Socket.init(os.AF_INET, os.SOCK_STREAM, os.IPPROTO_TCP, 0),
+                try pike.Socket.init(os.AF.INET, os.SOCK.STREAM, os.IPPROTO.TCP, 0),
                 self.address,
             );
             errdefer conn.socket.deinit();
@@ -212,7 +211,7 @@ pub fn Client(comptime opts: Options) type {
                 self.cleanup_counter.add(-1);
             }
 
-            yield();
+            snow.yield();
 
             try conn.socket.run(self.protocol);
         }

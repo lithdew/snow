@@ -1,16 +1,15 @@
 const std = @import("std");
 const pike = @import("pike");
 const sync = @import("sync.zig");
+const snow = @import("snow.zig");
 
 const os = std.os;
 const net = std.net;
 const mem = std.mem;
 const meta = std.meta;
-const atomic = std.atomic;
+const Atomic = std.atomic.Atomic;
 
-usingnamespace @import("socket.zig");
-
-pub fn Server(comptime opts: Options) type {
+pub fn Server(comptime opts: snow.Options) type {
     return struct {
         const Self = @This();
 
@@ -19,7 +18,7 @@ pub fn Server(comptime opts: Options) type {
             next: ?*Node = null,
         };
 
-        const ServerSocket = Socket(.server, opts);
+        const ServerSocket = snow.Socket(.server, opts);
         const Protocol = opts.protocol_type;
 
         pub const Connection = struct {
@@ -29,12 +28,12 @@ pub fn Server(comptime opts: Options) type {
         };
 
         protocol: Protocol,
-        allocator: *mem.Allocator,
+        allocator: mem.Allocator,
         notifier: *const pike.Notifier,
         socket: pike.Socket,
 
         lock: sync.Mutex = .{},
-        done: atomic.Bool = atomic.Bool.init(false),
+        done: Atomic(bool) = Atomic(bool).init(false),
 
         pool: [opts.max_connections_per_server]*Connection = undefined,
         pool_len: usize = 0,
@@ -44,12 +43,12 @@ pub fn Server(comptime opts: Options) type {
 
         frame: @Frame(Self.run) = undefined,
 
-        pub fn init(protocol: Protocol, allocator: *mem.Allocator, notifier: *const pike.Notifier, address: net.Address) !Self {
+        pub fn init(protocol: Protocol, allocator: mem.Allocator, notifier: *const pike.Notifier, address: net.Address) !Self {
             var self = Self{
                 .protocol = protocol,
                 .allocator = allocator,
                 .notifier = notifier,
-                .socket = try pike.Socket.init(os.AF_INET, os.SOCK_STREAM, os.IPPROTO_TCP, 0),
+                .socket = try pike.Socket.init(os.AF.INET, os.SOCK.STREAM, os.IPPROTO.TCP, 0),
             };
             errdefer self.socket.deinit();
 
@@ -61,7 +60,7 @@ pub fn Server(comptime opts: Options) type {
         }
 
         pub fn deinit(self: *Self) void {
-            if (self.done.xchg(true, .SeqCst)) return;
+            if (self.done.swap(true, .SeqCst)) return;
 
             self.socket.deinit();
             await self.frame catch {};
@@ -77,8 +76,8 @@ pub fn Server(comptime opts: Options) type {
             var pool_len: usize = 0;
 
             {
-                const held = self.lock.acquire();
-                defer held.release();
+                self.lock.mutex.lock();
+                defer self.lock.mutex.unlock();
 
                 pool = self.pool;
                 pool_len = self.pool_len;
@@ -96,8 +95,8 @@ pub fn Server(comptime opts: Options) type {
         }
 
         pub fn purge(self: *Self) void {
-            const held = self.lock.acquire();
-            defer held.release();
+            self.lock.mutex.lock();
+            defer self.lock.mutex.unlock();
 
             while (self.cleanup_queue) |head| {
                 await head.ptr.frame catch {};
@@ -124,8 +123,8 @@ pub fn Server(comptime opts: Options) type {
         }
 
         fn cleanup(self: *Self, node: *Node) void {
-            const held = self.lock.acquire();
-            defer held.release();
+            self.lock.mutex.lock();
+            self.lock.mutex.unlock();
 
             node.next = self.cleanup_queue;
             self.cleanup_queue = node;
@@ -137,9 +136,9 @@ pub fn Server(comptime opts: Options) type {
         }
 
         fn run(self: *Self) !void {
-            yield();
+            snow.yield();
 
-            defer if (!self.done.xchg(true, .SeqCst)) {
+            defer if (!self.done.swap(true, .SeqCst)) {
                 self.socket.deinit();
                 self.close();
             };
@@ -175,8 +174,8 @@ pub fn Server(comptime opts: Options) type {
             try conn.socket.unwrap().registerTo(self.notifier);
 
             {
-                const held = self.lock.acquire();
-                defer held.release();
+                self.lock.mutex.lock();
+                defer self.lock.mutex.unlock();
 
                 if (self.pool_len + 1 == opts.max_connections_per_server) {
                     return error.MaxConnectionLimitExceeded;
@@ -190,8 +189,8 @@ pub fn Server(comptime opts: Options) type {
         }
 
         fn deleteConnection(self: *Self, conn: *Connection) bool {
-            const held = self.lock.acquire();
-            defer held.release();
+            self.lock.mutex.lock();
+            defer self.lock.mutex.unlock();
 
             var pool = self.pool[0..self.pool_len];
 
@@ -218,7 +217,7 @@ pub fn Server(comptime opts: Options) type {
                 self.cleanup_counter.add(-1);
             }
 
-            yield();
+            snow.yield();
 
             if (comptime meta.trait.hasFn("handshake")(meta.Child(Protocol))) {
                 conn.socket.context = try self.protocol.handshake(.server, &conn.socket.inner);

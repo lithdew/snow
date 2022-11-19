@@ -6,7 +6,7 @@ const sync = @import("sync.zig");
 const net = std.net;
 const meta = std.meta;
 
-pub const Side = packed enum(u1) {
+pub const Side = enum(u1) {
     client,
     server,
 };
